@@ -110,20 +110,46 @@ def build_traces(edf, ndf, metric, top_n):
             line=dict(color=hex_rgba(colour, alpha), width=width),
             hoverinfo="skip", showlegend=False))
 
+    # ── Node strength from full edge list (before top_n filter) ─────────────
+    str_A = edf.groupby("ROI_A")[col].sum().reset_index().rename(
+        columns={"ROI_A": "name", col: "strength"})
+    str_B = edf.groupby("ROI_B")[col].sum().reset_index().rename(
+        columns={"ROI_B": "name", col: "strength"})
+    strength_df = (pd.concat([str_A, str_B])
+                     .groupby("name", as_index=False)["strength"].sum())
+
     active    = pd.concat([df["ROI_A"], df["ROI_B"]]).unique()
-    sub_nodes = ndf[ndf["name"].isin(active)]
+    sub_nodes = ndf[ndf["name"].isin(active)].copy().reset_index(drop=True)
+    sub_nodes = sub_nodes.merge(strength_df, on="name", how="left")
+    sub_nodes["strength"] = sub_nodes["strength"].fillna(0)
+
+    s_min = sub_nodes["strength"].min()
+    s_max = sub_nodes["strength"].max()
+    # Map strength → marker size [5, 18]
+    sub_nodes["marker_size"] = (5 + 13 * (sub_nodes["strength"] - s_min)
+                                  / (s_max - s_min + 1e-12))
+
     for lobe, grp in sub_nodes.groupby("lobe"):
         c = LOBE_COL.get(lobe, "#aaa")
         traces.append(go.Scatter3d(
-            x=grp.x, y=grp.y, z=grp.z,
+            x=grp.x.tolist(), y=grp.y.tolist(), z=grp.z.tolist(),
             mode="markers+text",
-            text=grp.name,
+            text=grp.name.tolist(),
             textposition="top center",
             textfont=dict(size=7, color="rgba(30,30,30,0.75)"),
-            marker=dict(size=5, color="white",
-                        line=dict(color=c, width=2.2)),
+            marker=dict(
+                size=grp["marker_size"].tolist(),
+                color="white",
+                line=dict(color=c, width=2.2)
+            ),
             name=lobe, legendgroup=lobe,
-            hovertemplate="<b>%{text}</b><br>x=%{x:.1f} y=%{y:.1f} z=%{z:.1f}<extra></extra>"))
+            hovertemplate=(
+                "<b>%{text}</b><br>"
+                "x=%{x:.1f}  y=%{y:.1f}  z=%{z:.1f}<br>"
+                "strength=%{customdata:.3g}<extra></extra>"
+            ),
+            customdata=grp["strength"].tolist()
+        ))
     return traces
 
 

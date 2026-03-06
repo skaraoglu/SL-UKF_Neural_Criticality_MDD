@@ -1,0 +1,133 @@
+================================================================================
+MDD UKF EXPERIMENT LOG  —  Analysis Handoff Document
+Generated : 2026-03-06 01:42:12 CST
+R version : R version 4.3.1 (2023-06-16)
+Platform  : aarch64-apple-darwin20
+================================================================================
+
+[STUDY_META]
+subject           : TP_E3834_rest
+session           : REST1
+n_volumes         : 260
+n_rois            : 110  (Bst.L, Bst.R excluded from raw 112)
+n_pairs           : 5995
+
+[SIGNAL_PROCESSING]
+smooth_preset     : light
+bandwidth_trs     : 2.20
+cutoff_hz         : 0.1000
+var_retained_min  : 0.333
+var_retained_med  : 0.532
+var_retained_max  : 0.704
+noise_frac_med    : 0.468  (= 1 - var_retained_med)
+
+[UKF_PARAMETERS]
+R_scale           : 0.084832  (data-driven: noise_frac / (h * sqrt(2*pi)))
+Q_scale           : 0.00084832  (= R * 0.01, stationarity assumption)
+Q_R_ratio         : 0.0100
+BOLD_AB_lower     : 0.01579  (f = 0.01 Hz, rad2/TR2)
+BOLD_AB_upper     : 3.55306  (f = 0.15 Hz, rad2/TR2)
+param_lower       : [0.01579, 0.01579, 1e-08]  # [a, b, k]
+param_upper       : [3.55306, 3.55306, Inf]  # [a, b, k]
+iter_maxsteps     : 10
+param_tol         : 0.001
+
+[SINGLE_PASS]
+n_success         : 5995 / 5995  (100.0%)
+chisq             : min=0.34015  p25=0.48987  med=0.53690  p75=0.58337  max=0.69961
+a                 : min=0.00610  p25=0.95131  med=1.01484  p75=1.10466  max=1.90430
+b                 : min=0.00340  p25=0.96409  med=1.01348  p75=1.10127  max=2.11711
+k                 : min=0.58501  p25=0.99045  med=0.99786  p75=1.00070  max=2.33139
+pct_a_in_band     : 100.0%
+pct_b_in_band     : 100.0%
+
+[ITERATIVE]
+n_success         : 5995 / 5995  (100.0%)
+chisq             : min=0.34010  p25=0.48862  med=0.53553  p75=0.58126  max=0.69939
+a                 : min=0.01579  p25=0.70269  med=1.12096  p75=1.62726  max=3.55306
+b                 : min=0.01579  p25=0.74975  med=1.14423  p75=1.64579  max=3.55306
+k                 : min=0.00000  p25=0.88582  med=0.97612  p75=1.00514  max=19.89939
+pct_a_in_band     : 100.0%  (by construction — bounds enforced)
+pct_b_in_band     : 100.0%
+n_a_at_lower      : 4  (0.1%)
+n_a_at_upper      : 1  (0.0%)
+n_b_at_lower      : 5  (0.1%)
+n_b_at_upper      : 56  (0.9%)
+n_ab_both_upper   : 0  (0.0%)  -> pairs where a=b=upper -> w_sync=Inf
+iter_median       : 10  |  iter_max: 10
+pct_hit_maxsteps  : 99.4%  (CRITICAL: 0 pairs converged by tolerance or plateau)
+chi2_improvement  : median=0.000329  (0.06% relative)
+pct_improved_vs_sp: 97.8%
+
+[CONVERGENCE_FLAGS]
+FLAG: ALL_MAXSTEPS — 99% of pairs hit ITER_MAXSTEPS=10; 0 genuine convergence
+FLAG: K_EXPLOSION — k_max inflated 8.5x  (single-pass 2.331 → iterative 19.899)
+FLAG: A_UPPER_BOUND_ACTIVE — 1 pairs (0.0%) have a = BOLD_AB_upper
+FLAG: B_UPPER_BOUND_ACTIVE — 56 pairs (0.9%) have b = BOLD_AB_upper
+FLAG: A_LOWER_BOUND_ACTIVE — 4 pairs (0.1%) have a = BOLD_AB_lower -> inflated w_norm
+FLAG: B_LOWER_BOUND_ACTIVE — 5 pairs (0.1%) have b = BOLD_AB_lower -> inflated w_norm
+FLAG: K_UNBOUNDED — k has no upper bound (PARAM_UPPER[3]=Inf); L-BFGS-B also needs k_max
+
+[NETWORK_METRICS]  (50% density threshold)
+metric      nodes   edges   density   mean_wcc  top3_hubs_by_strength
+--------------------------------------------------------------------------------
+w_k           110    2998    0.5001     0.0401  CGa.L(192.6)  FP.L(184.2)  FP.R(181.4)
+w_norm        110    2998    0.5001     0.0091  CGa.L(415.4)  FP.L(370.1)  FP.R(369.6)
+w_sync        110    2998    0.5001     0.0001  Pall.R(69028.4)  SMC.R(68884.3)  CALC.L(6801.1)
+w_frac        110    2998    0.5001     0.3083  CGa.L(49.3)  FP.R(47.5)  POG.L(47.3)
+
+[METRIC_CORRELATIONS]  (Spearman, log1p scale)
+  k                    vs k/sqrt(ab)           : 0.356
+  k                    vs k/|a-b|              : 0.482
+  k                    vs 2k/(a+b+2k)          : 0.440
+  k/sqrt(ab)           vs 2k/(a+b+2k)          : 0.950
+
+[TOP_PAIRS_SINGLE_PASS]  (top 10 by k)
+  Region_Pair                     a        b        k     chi2
+  FP.R_POG.L                 0.3802   0.4936   2.3314   0.6487
+  FP.L_FP.R                  1.5411   0.0034   1.8698   0.6478
+  F3t.L_TO2.L                0.2502   0.6002   1.6917   0.5674
+  CN.L_Caud.L                0.1834   0.6721   1.6524   0.5526
+  Caud.L_Pall.L              0.3454   0.3548   1.5144   0.4415
+  SC.L_Caud.L                0.9108   0.5863   1.4441   0.4563
+  H.L_Caud.L                 0.7060   0.4075   1.4230   0.4777
+  T3a.R_Caud.L               1.3122   0.2978   1.3941   0.5378
+  Caud.L_Caud.R              0.2063   1.1472   1.3902   0.4273
+  FOC.R_Caud.L               0.7807   0.4524   1.3826   0.4718
+
+[TOP_PAIRS_ITERATIVE]  (top 10 by k)
+  Region_Pair                     a        b        k     chi2  n_iter
+  F2.R_F3t.L                 2.8728   0.0158  19.8994   0.5669  10
+  CGa.L_CN.L                 0.8828   1.0128  19.5265   0.4111  10
+  FP.R_CN.L                  2.8169   0.5703  18.2402   0.4330  10
+  FP.L_CGa.L                 2.0126   3.2333  17.3188   0.4534  10
+  T3p.R_CGa.L                0.4474   0.1108  13.1674   0.5084  10
+  CGa.L_PCN.R                0.5840   1.4913  13.0249   0.4988  10
+  FP.L_PAC.R                 0.6370   1.1846  11.2317   0.5571  10
+  FP.R_F1.L                  0.5111   0.6962  10.3688   0.5928  10
+  FP.R_CO.R                  0.3360   0.7551  10.2021   0.5671  10
+  FP.R_SCLC.L                0.2493   0.8018   9.6103   0.6096  10
+
+[TOP_PAIRS_ITERATIVE]  (top 10 by chi2, lowest)
+  Region_Pair                     a        b        k     chi2  n_iter
+  TP.R_PP.L                  0.8984   0.8321   1.0121   0.3401  10
+  TP.L_TP.R                  1.0848   0.3820   0.9850   0.3519  10
+  TP.R_TFa.L                 0.3254   0.9505   1.0267   0.3600  10
+  PRG.R_TP.R                 0.9502   0.7476   0.7762   0.3604  10
+  TP.L_PP.L                  1.2573   0.5093   0.8849   0.3606  10
+  TP.R_PO.L                  0.7123   1.0180   0.9789   0.3616  10
+  TP.R_TFp.R                 0.9451   1.0637   1.0086   0.3634  10
+  TP.R_Caud.R                0.8885   0.2939   0.5613   0.3648  10
+  TP.R_Hip.R                 0.7104   1.1016   0.9915   0.3652  10
+  TP.R_SMC.L                 0.5534   0.9868   0.8559   0.3670  10
+
+[OPTIMIZATION_STATUS]
+current_method    : iterative_param_optim (fixed-point iterator)
+status            : NOT converging — k drifts upward monotonically
+recommended_fix   : switch to optim_params(method='L-BFGS-B') with bounded k
+k_upper_needed    : yes — suggested k_max = BOLD_AB_UPPER * 2 = 7.106
+most_robust_metric: w_frac = 2k/(a+b+2k)  [bounded 0-1, insensitive to k explosion]
+
+================================================================================
+END OF LOG
+================================================================================

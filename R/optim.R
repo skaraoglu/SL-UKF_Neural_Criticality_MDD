@@ -1,10 +1,10 @@
 # =============================================================================
 # optim.R
-# Parameter optimization wrappers around UKF_blend.
+# Parameter optimisation wrappers around UKF_blend.
 #
 # Functions:
 #   iterative_param_optim()  -- Repeated UKF passes until convergence
-#   optim_params()           -- optim()-based (L-BFGS-B or SANN) outer optimizer
+#   optim_params()           -- optim()-based (L-BFGS-B or SANN) outer optimiser
 #
 # Bugs fixed vs. original:
 #   - Convergence norm changed from abs(sum(diff)) to true L2 norm
@@ -39,6 +39,13 @@ source("R/ukf_engine.R")
 #' @param seeded       Reproducible noise injection if TRUE.
 #' @param verbose      Write per-iteration CSV log if TRUE.
 #' @param log_file     Path for verbose CSV log (default: temp file).
+#' @param param_lower  Optional numeric vector (length N_p) of per-parameter lower
+#'                     bounds applied via pmax() after each UKF pass.  Use this to
+#'                     keep a, b within the physiological BOLD frequency range.
+#'                     NULL (default) applies no lower clipping beyond forcePositive.
+#' @param param_upper  Optional numeric vector (length N_p) of per-parameter upper
+#'                     bounds applied via pmin() after each UKF pass.
+#'                     NULL (default) applies no upper clipping.
 #' @return List: par, value, param_norm, steps, param_est, xhat,
 #'               chisq (vector over iterations).
 #' @export
@@ -52,9 +59,13 @@ iterative_param_optim <- function(param_guess,
                                    forcePositive = FALSE,
                                    seeded        = FALSE,
                                    verbose       = FALSE,
-                                   log_file      = tempfile(fileext = ".csv")) {
+                                   log_file      = tempfile(fileext = ".csv"),
+                                   param_lower   = NULL,
+                                   param_upper   = NULL) {
 
   stopifnot(length(param_guess) == N_p, param_tol > 0, MAXSTEPS >= 1)
+  if (!is.null(param_lower)) stopifnot(length(param_lower) == N_p)
+  if (!is.null(param_upper)) stopifnot(length(param_upper) == N_p)
 
   best_param  <- param_guess
   best_chisq  <- Inf
@@ -78,6 +89,13 @@ iterative_param_optim <- function(param_guess,
                           seeded        = seeded)
 
     param_new    <- as.numeric(ukf_run$param_est)
+
+    # ── Physiological bounds clipping ──────────────────────────────────────
+    # Applied BEFORE storing as best_param and BEFORE using as next param_guess.
+    # This keeps a, b in the BOLD frequency band across all iterations.
+    if (!is.null(param_lower)) param_new <- pmax(param_new, param_lower)
+    if (!is.null(param_upper)) param_new <- pmin(param_new, param_upper)
+
     chisq_trace  <- c(chisq_trace, ukf_run$chisq)
 
     # FIX: true L2 norm — prevents +/- cancellation masking non-convergence
@@ -120,7 +138,7 @@ iterative_param_optim <- function(param_guess,
 # -----------------------------------------------------------------------------
 #' optim_params
 #'
-#' Wraps optim() (L-BFGS-B or SANN) around UKF_blend to minimize chi-square
+#' Wraps optim() (L-BFGS-B or SANN) around UKF_blend to minimise chi-square
 #' as an outer objective function.  Less efficient than iterative_param_optim
 #' for smooth problems but useful for non-convex landscapes.
 #'
