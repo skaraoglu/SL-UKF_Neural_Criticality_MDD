@@ -142,7 +142,7 @@ UKF_dT <- function(t_dummy, ode_model, xhat, Pxx, y_obs,
 
   # Process noise on parameter block only
   Q               <- matrix(0, N_x, N_x)
-  Q[1:N_p, 1:N_p] <- Q_scale * diag(N_p)
+  Q[1:N_p, 1:N_p] <- Q_scale^2 * diag(N_p) #old version: Q[1:N_p, 1:N_p] <- Q_scale * diag(N_p)
   Pxx             <- Pxx + Q
 
   # ---- Observation prediction (vectorized) ---------------------------------
@@ -234,7 +234,8 @@ UKF_blend <- function(t_dummy, ts_data, ode_model, N_p, N_y,
   xhat[, 1] <- x[, 1]
 
   R        <- (R_scale)^2 * cov(t(x[(N_p + 1):(N_p + N_y), ]))
-  Pxx[[1]] <- pracma::blkdiag(Q_scale * diag(N_p), R)
+  # old version: Pxx[[1]] <- pracma::blkdiag(Q_scale * diag(N_p), R)
+  Pxx[[1]] <- pracma::blkdiag(Q_scale^2 * diag(N_p), R) 
 
   # --- Noise-injected observations for UKF measurement updates --------------
   # FIX: dimensions now driven by N_y, not hardcoded to 2

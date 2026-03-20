@@ -46,8 +46,13 @@ source("R/ukf_engine.R")
 #' @param param_upper  Optional numeric vector (length N_p) of per-parameter upper
 #'                     bounds applied via pmin() after each UKF pass.
 #'                     NULL (default) applies no upper clipping.
+#' @param chisq_plateau_tol  Chi-square change below which iteration is declared a
+#'                     plateau and stopped early.  Defaults to the static fallback in
+#'                     UKF_CONSTANTS$CHISQ_PLATEAU_TOL (1e-5).  Pass the data-driven
+#'                     value CHISQ_PLATEAU_TOL_DYN (= N_y * R_scale * 1e-3, computed
+#'                     in §3.3) for a threshold calibrated to the actual noise floor.
 #' @return List: par, value, param_norm, steps, param_est, xhat,
-#'               chisq (vector over iterations).
+#'               chisq (vector over iterations), stop_reason (string).
 #' @export
 iterative_param_optim <- function(param_guess,
                                    t_dummy, ts_data, ode_model,
@@ -61,7 +66,8 @@ iterative_param_optim <- function(param_guess,
                                    verbose       = FALSE,
                                    log_file      = tempfile(fileext = ".csv"),
                                    param_lower   = NULL,
-                                   param_upper   = NULL) {
+                                   param_upper   = NULL,
+                                   chisq_plateau_tol = UKF_CONSTANTS$CHISQ_PLATEAU_TOL) {
 
   stopifnot(length(param_guess) == N_p, param_tol > 0, MAXSTEPS >= 1)
   if (!is.null(param_lower)) stopifnot(length(param_lower) == N_p)
@@ -117,20 +123,25 @@ iterative_param_optim <- function(param_guess,
     }
 
     chisq_plateau <- length(chisq_trace) > 1 &&
-      abs(diff(tail(chisq_trace, 2))) < UKF_CONSTANTS$CHISQ_PLATEAU_TOL
+      abs(diff(tail(chisq_trace, 2))) < chisq_plateau_tol
 
     done <- (param_norm < param_tol) || (steps >= MAXSTEPS) || chisq_plateau
     param_guess <- param_new
   }
 
+  stop_reason <- if (param_norm < param_tol)          "param_tol"
+                 else if (steps >= MAXSTEPS)           "maxsteps"
+                 else                                  "chisq_plateau"
+
   list(
-    par        = best_param,
-    value      = best_chisq,
-    param_norm = param_norm,
-    steps      = steps,
-    param_est  = best_param,
-    xhat       = best_xhat,
-    chisq      = chisq_trace    # chi-square at every iteration
+    par         = best_param,
+    value       = best_chisq,
+    param_norm  = param_norm,
+    steps       = steps,
+    param_est   = best_param,
+    xhat        = best_xhat,
+    chisq       = chisq_trace,    # chi-square at every iteration
+    stop_reason = stop_reason
   )
 }
 
@@ -139,61 +150,80 @@ iterative_param_optim <- function(param_guess,
 #' optim_params
 #'
 #' Wraps optim() (L-BFGS-B or SANN) around UKF_blend to minimise chi-square
-#' as an outer objective function.  Less efficient than iterative_param_optim
-#' for smooth problems but useful for non-convex landscapes.
+#' as an outer objective function.
 #'
-#' @param param_guess  Initial parameter vector (length N_p).
+#' L-BFGS-B is the recommended method for the coupled-oscillator UKF because:
+#'   - The chi-square landscape is smooth and locally convex near the optimum.
+#'   - Three parameters (a, b, k) are few enough for quasi-Newton methods.
+#'   - Hard box bounds on a, b, k are enforced exactly (unlike the soft clipping
+#'     used in iterative_param_optim).
+#'   - Convergence is by gradient norm — a well-defined, reproducible criterion.
+#'
+#' @param param_guess  Initial parameter vector (length N_p).  Use the single-pass
+#'                     UKF estimate as a warm start for each pair.
 #' @param method       "L-BFGS-B" (default) or "SANN".
-#' @param lower_lim    Lower bound (L-BFGS-B only).
-#' @param upper_lim    Upper bound (L-BFGS-B only).
-#' @param maxit        Max iterations (SANN only).
+#' @param lower_lim    Lower bound vector length N_p (L-BFGS-B only).
+#' @param upper_lim    Upper bound vector length N_p (L-BFGS-B only).
+#' @param maxit        Max optimizer iterations (default 200).
+#' @param factr        L-BFGS-B relative function-decrease tolerance (default 1e3;
+#'                     lower = tighter convergence; 1e7 is optim() default).
 #' @param temp         Annealing temperature (SANN only, default 20).
-#' @param t_dummy      Scalar dummy time variable.
-#' @param ts_data      Time-series matrix.
-#' @param ode_model    ODE model function.
-#' @param N_p, N_y, dt, dT, R_scale, Q_scale  See UKF_blend.
-#' @param forcePositive, seeded  See UKF_blend.
-#' @return List: par, value, param_est, xhat.
+#' @param t_dummy, ts_data, ode_model, N_p, N_y, dt, dT  See UKF_blend.
+#' @param R_scale, Q_scale, forcePositive, seeded  See UKF_blend.
+#' @return List: par, value, param_est, xhat, convergence (0=ok), message,
+#'               counts (number of UKF evaluations).
 #' @export
 optim_params <- function(param_guess,
                           method    = "L-BFGS-B",
                           lower_lim = NULL, upper_lim = NULL,
-                          maxit     = 1000L, temp = 20,
+                          maxit     = 200L,
+                          factr     = 1e3,
+                          temp      = 20,
                           t_dummy, ts_data, ode_model,
                           N_p, N_y, dt, dT,
                           R_scale = 0.3, Q_scale = 0.015,
                           forcePositive = FALSE, seeded = FALSE) {
 
-  ukf_obj <- NULL
+  ukf_obj   <- NULL
+  CHISQ_MAX <- 1e6   # penalty returned when UKF produces NaN/Inf
 
   chisq_objective <- function(par_vec) {
-    ukf_obj <<- UKF_blend(t_dummy, ts_data, ode_model,
-                           N_p, N_y, par_vec, dt, dT,
-                           R_scale, Q_scale,
-                           forcePositive = forcePositive,
-                           seeded        = seeded)
-    ukf_obj$chisq
+    result <- tryCatch(
+      UKF_blend(t_dummy, ts_data, ode_model,
+                N_p, N_y, par_vec, dt, dT,
+                R_scale, Q_scale,
+                forcePositive = forcePositive,
+                seeded        = seeded),
+      error = function(e) NULL
+    )
+    if (is.null(result) || !is.finite(result$chisq)) return(CHISQ_MAX)
+    ukf_obj <<- result
+    result$chisq
   }
 
-  ctrl <- if (method == "SANN") list(maxit = maxit, temp = temp) else list()
-
-  opt <- if (method == "SANN") {
-    optim(param_guess, chisq_objective,
-          method  = "SANN",
-          control = ctrl)
+  if (method == "SANN") {
+    opt <- optim(param_guess, chisq_objective,
+                 method  = "SANN",
+                 control = list(maxit = maxit, temp = temp))
   } else {
     if (is.null(lower_lim) || is.null(upper_lim))
       stop("lower_lim and upper_lim are required for L-BFGS-B.")
-    optim(param_guess, chisq_objective,
-          method = "L-BFGS-B",
-          lower  = lower_lim,
-          upper  = upper_lim)
+    opt <- optim(param_guess, chisq_objective,
+                 method  = "L-BFGS-B",
+                 lower   = lower_lim,
+                 upper   = upper_lim,
+                 control = list(maxit = maxit, factr = factr))
   }
 
-  list(par       = opt$par,
-       value     = opt$value,
-       param_est = opt$par,
-       xhat      = ukf_obj$xhat)
+  list(
+    par         = opt$par,
+    value       = opt$value,
+    param_est   = opt$par,
+    xhat        = if (!is.null(ukf_obj)) ukf_obj$xhat else NULL,
+    convergence = opt$convergence,    # 0 = converged; 1 = maxit hit; 52/53 = error
+    message     = if (!is.null(opt$message)) opt$message else "",
+    counts      = unname(opt$counts["function"])  # number of UKF evaluations
+  )
 }
 
 

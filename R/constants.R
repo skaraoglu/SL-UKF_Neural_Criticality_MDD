@@ -27,7 +27,25 @@ UKF_CONSTANTS <- list(
   # --- Iterative optimisation -----------------------------------------------
   PARAM_TOL_DEFAULT  = 1e-3,   # Default L2 convergence tolerance
   MAXSTEPS_DEFAULT   = 1000,   # Default maximum iterations
-  CHISQ_PLATEAU_TOL  = 1e-8,   # Chi-square change below which we declare plateau
+
+  # Chi-square plateau tolerance — static fallback value.
+  #
+  # History / bug fix:
+  #   The original value of 1e-8 was ~8 orders of magnitude below the minimum
+  #   achievable chi-square for this dataset (floor ≈ N_y × R_scale ≈ 0.17).
+  #   It could never physically be reached, so the plateau criterion never fired
+  #   and every pair ran until MAXSTEPS was exhausted.
+  #
+  # Static fix: 1e-5  (~0.006% of the chi-square floor — fires reliably)
+  #
+  # Dynamic version (preferred): computed in §3.3 of main_analysis.ipynb from
+  #   the actual R_scale and N_y of the current dataset:
+  #     CHISQ_PLATEAU_TOL_DYN = N_y * R_scale * 1e-3
+  #   ≈ 2 × 0.085 × 0.001 = 1.7×10⁻⁴  (~5× the observed per-step improvement)
+  #   This value is passed explicitly to iterative_param_optim() via the
+  #   chisq_plateau_tol argument; the value here serves as the fallback when
+  #   no dynamic value has been computed.
+  CHISQ_PLATEAU_TOL  = 1e-5,   # static fallback — overridden by dynamic §3.3 value
 
   # --- RK4 integration ------------------------------------------------------
   DT_FRACTION        = 0.1,    # dt = DT_FRACTION * dT  (sub-step size)

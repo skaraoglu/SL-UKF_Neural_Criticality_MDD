@@ -181,8 +181,13 @@ select_bandwidth <- function(signal,
   t_pts     <- seq_len(n)
   smoothed  <- ksmooth(t_pts, signal, kernel = "normal",
                         bandwidth = h, n.points = n)$y
-  raw_var   <- var(signal)
-  var_ratio <- if (raw_var > 0) var(smoothed, na.rm = TRUE) / raw_var else 1.0
+  # Compute raw variance robustly (handle NA or constant signals)
+  raw_var <- var(signal, na.rm = TRUE)
+  if (!is.finite(raw_var) || raw_var <= 0) {
+    var_ratio <- 1.0
+  } else {
+    var_ratio <- var(smoothed, na.rm = TRUE) / raw_var
+  }
 
   if (var_ratio < FMRI_ACQ$VAR_THRESHOLD)
     warning(sprintf(

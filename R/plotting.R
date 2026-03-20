@@ -232,3 +232,70 @@ plot_parameter_heatmap <- function(results_df,
   print(p)
   invisible(p)
 }
+
+
+plot_brain_network <- function(edges, weight_col, log_col,
+                                top_n  = TOP_EDGES,
+                                title  = weight_col,
+                                colour = "#2C3E50") {
+
+  # ── Node strength from FULL edge list (captures global network importance) ──
+  str_df <- rbind(
+    data.frame(ROI = edges$ROI_A, w = edges[[weight_col]], stringsAsFactors = FALSE),
+    data.frame(ROI = edges$ROI_B, w = edges[[weight_col]], stringsAsFactors = FALSE)
+  ) |>
+    dplyr::group_by(ROI) |>
+    dplyr::summarise(strength = sum(w, na.rm = TRUE), .groups = "drop")
+
+  # ── Select top_n edges for display ────────────────────────────────────────
+  edges   <- edges[order(-edges[[weight_col]]), ]
+  edges   <- head(edges, top_n)
+  lw      <- edges[[log_col]]
+  lw_norm <- (lw - min(lw)) / (max(lw) - min(lw) + 1e-12)
+  edges$alpha <- 0.05 + 0.90 * lw_norm
+  edges$lwd   <- 0.15 + 2.00 * lw_norm
+
+  node_rois <- unique(c(edges$ROI_A, edges$ROI_B))
+  nodes     <- HOA_ATLAS[HOA_ATLAS$name %in% node_rois, ]
+
+  # ── Map strength → node size [1.5, 7.5] ───────────────────────────────────
+  nodes <- dplyr::left_join(nodes, str_df, by = c("name" = "ROI"))
+  nodes$strength[is.na(nodes$strength)] <- 0
+  s_rng <- range(nodes$strength)
+  nodes$node_size <- 1.5 + 6.0 * (nodes$strength - s_rng[1]) /
+                                   (s_rng[2] - s_rng[1] + 1e-12)
+
+  key_nodes <- nodes[nodes$name %in% KEY_ROIS, ]
+
+  t_seq   <- seq(0, 2*pi, length.out = 300)
+  ellipse <- data.frame(x = BRAIN_RX * cos(t_seq),
+                         y = BRAIN_CY + BRAIN_RY * sin(t_seq))
+
+  ggplot() +
+    geom_path(data = ellipse, aes(x = x, y = y),
+              colour = "grey75", linewidth = 0.45, linetype = "dashed") +
+    geom_segment(data = edges,
+                 aes(x = xA, y = yA, xend = xB, yend = yB,
+                     alpha = alpha, linewidth = lwd),
+                 colour = colour, lineend = "round", show.legend = FALSE) +
+    scale_alpha_identity() +
+    scale_linewidth_identity() +
+    geom_point(data = nodes,
+               aes(x = x, y = y, colour = lobe, size = node_size),
+               shape = 21, fill = "white", stroke = 0.8) +
+    scale_size_identity() +
+    scale_colour_manual(values = LOBE_COLOURS, name = "Lobe") +
+    geom_text(data = key_nodes, aes(x = x, y = y, label = name),
+              size = 2.4, vjust = -1.0, colour = "grey20", fontface = "bold") +
+    coord_equal(xlim = XLIM, ylim = YLIM) +
+    labs(title    = title,
+         subtitle = sprintf("Top %d edges | node size ∝ strength | %s", top_n, proto_id),
+         x = "x MNI (left <- -> right)",
+         y = "y MNI (posterior <- -> anterior)") +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid      = element_blank(),
+          axis.ticks      = element_blank(),
+          legend.position = "right",
+          plot.title      = element_text(face = "bold", size = 12),
+          plot.subtitle   = element_text(size = 9, colour = "grey40"))
+}
