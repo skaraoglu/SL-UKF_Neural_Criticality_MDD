@@ -33,10 +33,10 @@ We fit a **Stuart-Landau oscillator** (the normal form of a supercritical Hopf b
   ───────────────────────┼───────────────────────
   Subcritical        Critical         Supercritical
   (noise-driven)    (phase transition)  (limit cycle)
-        ◂── MDD ──▸     ▲
-                        │
-                    therapeutic
-                      target
+    ◂── MDD ──▸     ▲
+                    │
+               therapeutic
+                  target
 ```
 
 </div>
