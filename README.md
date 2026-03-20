@@ -26,21 +26,6 @@ This repository contains the analysis pipeline for a **double-blind, sham-contro
 
 We fit a **Stuart-Landau oscillator** (the normal form of a supercritical Hopf bifurcation) to each brain region's BOLD time series via an **Unscented Kalman Filter**, estimating a per-region *bifurcation parameter* $a$ that quantifies each region's distance from the critical boundary between noise-driven and self-sustaining oscillatory dynamics.
 
-<div align="center">
-
-```
-    a < 0              a = 0              a > 0
-  ───────────────────────┼───────────────────────
-  Subcritical        Critical         Supercritical
-  (noise-driven)    (phase transition)  (limit cycle)
-    ◂── MDD ──▸     ▲
-                    │
-               therapeutic
-                  target
-```
-
-</div>
-
 ---
 
 ## Study Design
