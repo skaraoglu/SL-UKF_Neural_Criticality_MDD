@@ -1,4 +1,10 @@
 <div align="center">
+  
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/hero_mdd.png">
+  <img alt="Neural Criticality in MDD"
+       src="assets/hero_mdd.png" width="700">
+</picture>
 
 # Neural Criticality in Major Depressive Disorder
 
